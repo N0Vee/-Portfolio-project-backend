@@ -1,11 +1,9 @@
 const express = require(`express`);
 const Sequelize = require(`sequelize`);
-const app = express();
 const cors = require('cors');
+const app = express();
 
-app.use(cors({
-  origin: 'https://portfolio-project-backend-yy8b.onrender.com'
-}));
+app.use(cors());
 app.use(express.json());
 
 const sequelize = new Sequelize('database', 'username', 'passwored', {
