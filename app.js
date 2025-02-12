@@ -72,17 +72,13 @@ const storage = multer.diskStorage({
 
 const upload = multer({
     storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // Max file size of 5MB
+    limits: { fileSize: 20 * 1024 * 1024 }, // limit to 5MB
     fileFilter: (req, file, cb) => {
-        const fileTypes = /jpeg|jpg|png|gif/;
-        const mimeType = fileTypes.test(file.mimetype);
-        const extname = fileTypes.test(path.extname(file.originalname).toLowerCase());
-
-        if (mimeType && extname) {
-            return cb(null, true);
-        } else {
-            cb(new Error('Only image files (jpeg, jpg, png, gif) are allowed.'));
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+        if (!allowedTypes.includes(file.mimetype)) {
+            return cb(new Error('Only image files are allowed'), false);
         }
+        cb(null, true);
     }
 });
 
@@ -104,8 +100,8 @@ app.get('/blogs/:ID', (req, res) => {
 
 // Create blog with image upload
 app.post('/blogs', upload.single('ImgUrl'), (req, res) => {
-    if (!req.file) {
-        return res.status(400).send('Image file is required');
+    if (!req.file || !req.body.BlogName || !req.body.DetailIntro || !req.body.DetailBody || !req.body.DetailConclusion) {
+        return res.status(400).send('All fields are required, including image');
     }
 
     Blog.create({
@@ -122,15 +118,26 @@ app.post('/blogs', upload.single('ImgUrl'), (req, res) => {
 });
 
 // Update blog
-app.put('/blogs/:ID', (req, res) => {
+// Update blog
+app.put('/blogs/:ID', upload.single('ImgUrl'), (req, res) => {
     Blog.findByPk(req.params.ID).then(blog => {
         if (!blog) {
             res.status(404).send('Blog not found');
         } else {
-            blog.update(req.body).then(() => res.json(blog)).catch(err => res.status(500).send(err));
+            // Check if a new file was uploaded
+            if (req.file) {
+                // Update ImgUrl with the new file path
+                req.body.ImgUrl = `/uploads/${req.file.filename}`;
+            }
+
+            // Update other fields as well
+            blog.update(req.body)
+                .then(() => res.json(blog))
+                .catch(err => res.status(500).send(err));
         }
     }).catch(err => res.status(500).send(err));
 });
+
 
 // Delete blog
 app.delete('/blogs/:ID', (req, res) => {
