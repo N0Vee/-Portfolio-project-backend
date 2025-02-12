@@ -3,11 +3,18 @@ const Sequelize = require('sequelize');
 const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
+
+// Ensure uploads directory exists
+const uploadDir = 'uploads';
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir);
+}
 
 const sequelize = new Sequelize('database', 'username', 'password', {
     host: 'localhost',
@@ -53,17 +60,31 @@ const Blog = sequelize.define('blog', {
 
 sequelize.sync();
 
-// Multer storage configuration
+// Multer storage configuration with file size limit and file type filter
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, 'uploads/');
+        cb(null, uploadDir);
     },
     filename: function (req, file, cb) {
-        cb(null, Date.now() + path.extname(file.originalname));
+        cb(null, Date.now() + "-" + file.originalname);
     }
 });
 
-const upload = multer({ storage: storage });
+const upload = multer({
+    storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // Max file size of 5MB
+    fileFilter: (req, file, cb) => {
+        const fileTypes = /jpeg|jpg|png|gif/;
+        const mimeType = fileTypes.test(file.mimetype);
+        const extname = fileTypes.test(path.extname(file.originalname).toLowerCase());
+
+        if (mimeType && extname) {
+            return cb(null, true);
+        } else {
+            cb(new Error('Only image files (jpeg, jpg, png, gif) are allowed.'));
+        }
+    }
+});
 
 // Get all blogs
 app.get('/blogs', (req, res) => {
@@ -83,8 +104,12 @@ app.get('/blogs/:ID', (req, res) => {
 
 // Create blog with image upload
 app.post('/blogs', upload.single('ImgUrl'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).send('Image file is required');
+    }
+
     Blog.create({
-        ImgUrl: req.file ? `/uploads/${req.file.filename}` : '',
+        ImgUrl: `/uploads/${req.file.filename}`,
         BlogName: req.body.BlogName,
         BlogUrl: req.body.BlogUrl,
         DetailIntro: req.body.DetailIntro,
